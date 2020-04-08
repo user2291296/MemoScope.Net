@@ -25,7 +25,7 @@ namespace MemoScope.Modules.InstanceDetails
 
         public static void Display(UIModule parentModule, ClrDumpObject data)
         {
-            if (data.ClrType.IsArray)
+            if (data.ClrType?.IsArray ?? false)
             {
                 var elementsAddresses = new ArrayElementsAddressContainer(data);
                 var addresses = new AddressList(data.ClrDump, data.ClrType.ComponentType, elementsAddresses);
