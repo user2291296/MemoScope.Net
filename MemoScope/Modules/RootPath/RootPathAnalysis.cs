@@ -2,6 +2,7 @@
 using MemoScope.Core.Data;
 using MemoScope.Core.Helpers;
 using NLog;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
@@ -34,9 +35,12 @@ namespace MemoScope.Modules.RootPath
             }
             List<ulong> bestPath = null;
             var currentPath = new List<ulong>();
-            currentPath.Add(address);
-            bool result = FindShortestPath(currentPath, ref bestPath, clrDump);
-
+            bool result = FindShortestPath(address, currentPath, ref bestPath, clrDump.GetReferers, roots.Contains, new Dictionary<ulong,List<ulong>>());
+            if (!result)
+            {
+                currentPath = new List<ulong>();
+                FindShortestPath(address, currentPath, ref bestPath, clrDump.GetReferers, (addr) => !clrDump.HasReferers(addr), new Dictionary<ulong, List<ulong>>());
+            }
             List<RootPathInformation> path = new List<RootPathInformation>();
             ulong prevAddress = address;
             if (bestPath != null)
@@ -58,34 +62,50 @@ namespace MemoScope.Modules.RootPath
             return path;
         }
 
-        public static bool FindShortestPath(List<ulong> currentPath, ref List<ulong> bestPath, IClrDump clrDump)
+        public static bool FindShortestPath(ulong myaddress, List<ulong> currentPath, ref List<ulong> bestPath, Func<ulong, IEnumerable<ulong>> getReferers, Func<ulong, bool> isroot, IDictionary<ulong,List<ulong>> shortest_paths)
         {
-            if(logger.IsDebugEnabled) logger.Debug("FindShortestPath: currentPath: " + Str(currentPath)+", best: "+Str(bestPath));
-            if( bestPath != null && currentPath.Count >= bestPath.Count)
+            //if(logger.IsDebugEnabled) logger.Debug("FindShortestPath: currentPath: " + Str(currentPath)+", best: "+Str(bestPath));
+            if( bestPath != null && currentPath.Count >= bestPath.Count - 1)
             {
                 return false;
             }
             bool res = false;
-            foreach (var refAddress in clrDump.EnumerateReferers(currentPath[currentPath.Count-1]))
+            currentPath.Add(myaddress);
+            foreach (var refAddress in getReferers(myaddress))
             {
                 if(currentPath.Contains(refAddress))
                 {
+                    continue; // cycle detected 
+                }
+                //if (logger.IsDebugEnabled) logger.Debug($"Visiting: {refAddress:X}");
+                if (shortest_paths.TryGetValue(refAddress, out var path))
+                {
+                    if (path == null) continue; // no path to root ???
+                    if (path.Count + currentPath.Count < bestPath.Count)
+                    {
+                        bestPath = new List<ulong>(currentPath);
+                        bestPath.AddRange(path);
+                    }
                     continue;
                 }
-                if (logger.IsDebugEnabled) logger.Debug($"Visiting: {refAddress:X}");
-                currentPath.Add(refAddress);
-                if (! clrDump.HasReferers(refAddress))
+                if (isroot(refAddress))
                 {
                     bestPath = new List<ulong>(currentPath);
+                    currentPath.Add(refAddress);
                     if (logger.IsDebugEnabled) logger.Debug("Root found !, best path: "+Str(bestPath));
-                    currentPath.RemoveAt(currentPath.Count - 1);
                     return true;
                 }
 
-                res |= FindShortestPath(currentPath, ref bestPath, clrDump);
-                currentPath.RemoveAt(currentPath.Count - 1);
+                res |= FindShortestPath(refAddress, currentPath, ref bestPath, getReferers, isroot, shortest_paths);
             }
+            currentPath.RemoveAt(currentPath.Count - 1);
 
+            List<ulong> mybestpath = null;
+            if (bestPath!=null)
+            {
+                mybestpath = new List<ulong>(bestPath.Skip(currentPath.Count));
+            }
+            shortest_paths[myaddress] = mybestpath;
             return res;
         }
 
