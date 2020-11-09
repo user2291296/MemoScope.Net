@@ -69,6 +69,11 @@ namespace MemoScope.Modules.RootPath
             {
                 return false;
             }
+            // Prevent StackOverflowException
+            if (currentPath.Count >= 128)
+            {
+                return false;
+            }
             bool res = false;
             currentPath.Add(myaddress);
             foreach (var refAddress in getReferers(myaddress))
