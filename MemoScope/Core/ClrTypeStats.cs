@@ -27,11 +27,13 @@ namespace MemoScope.Core
             Type = type;
         }
 
-        public ClrTypeStats(int id, ClrType type, long nbInstances, ulong totalSize) : this(id, type)
+        public ClrTypeStats(int id, ClrType type, long nbInstances, ulong totalSize, string name) : this(id, type)
         {
             NbInstances = nbInstances;
             TotalSize= totalSize;
-            TypeName = Type.Name;
+            //TypeName = Type.Name;
+            TypeName = name;
+            Id = id;
         }
 
         public void Inc(ulong size)

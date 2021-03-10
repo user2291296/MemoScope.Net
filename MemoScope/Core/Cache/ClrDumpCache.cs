@@ -184,7 +184,7 @@ namespace MemoScope.Core.Cache
                 {
                     type = new ClrTypeError(name);
                 }
-                var clrTypeStats = new ClrTypeStats(id, type, count, totalSize);
+                var clrTypeStats = new ClrTypeStats(id, type, count, totalSize, name);
                 list.Add(clrTypeStats);
             }
             
