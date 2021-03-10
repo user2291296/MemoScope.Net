@@ -24,6 +24,7 @@ namespace MemoScope.Core.Cache
         private SQLiteParameter paramMethodTable_InsertType;
         private SQLiteParameter paramCount_InsertType;
         private SQLiteParameter paramTotalSize_InsertType;
+        private SQLiteParameter paramTypeAddr_InsertType;
 
         // Statement: insert into table Instances
         private SQLiteCommand cmdInsertInstance;
@@ -108,7 +109,7 @@ namespace MemoScope.Core.Cache
                 ClrTypeStats stat;
                 if (!stats.TryGetValue(type, out stat))
                 {
-                    stat = new ClrTypeStats(stats.Count, type);
+                    stat = new ClrTypeStats(stats.Count, type, address);
                     stats[type] = stat;
                 }
 
@@ -157,6 +158,7 @@ namespace MemoScope.Core.Cache
             paramMethodTable_InsertType.Value = stats.MethodTable;
             paramTotalSize_InsertType.Value = stats.TotalSize;
             paramCount_InsertType.Value = stats.NbInstances;
+            paramTypeAddr_InsertType.Value = stats.TypeAddr;
             cmdInsertType.ExecuteNonQuery();
         }
 
@@ -165,17 +167,22 @@ namespace MemoScope.Core.Cache
             var list = new List<ClrTypeStats>();
             SQLiteCommand cmd = new SQLiteCommand();
             cmd.Connection = cxion;
-            cmd.CommandText = "SELECT Id, Name, MethodTable, Count, TotalSize FROM Types";
+            cmd.CommandText = "SELECT Id, Name, MethodTable, Count, TotalSize, TypeAddr FROM Types";
             SQLiteDataReader dr = cmd.ExecuteReader();
             while (dr.Read())
             {
                 int id = dr.GetInt32(0);
                 var name = dr.GetString(1);
                 ulong methodTable = (ulong)dr.GetInt64(2);
+                var typeAddr = (ulong)dr.GetInt64(5);
                 var count = dr.GetInt64(3);
                 var totalSize = (ulong)dr.GetInt64(4);
 
-                ClrType type = ClrDump.GetType(methodTable);
+                ClrType type = ClrDump.Heap.GetObjectType(typeAddr);
+                if (type == null)
+                {
+                    type = ClrDump.GetType(methodTable);
+                }
                 if (type == null)
                 {
                     type = ClrDump.GetType(name);
@@ -184,7 +191,7 @@ namespace MemoScope.Core.Cache
                 {
                     type = new ClrTypeError(name);
                 }
-                var clrTypeStats = new ClrTypeStats(id, type, count, totalSize, name);
+                var clrTypeStats = new ClrTypeStats(id, type, count, totalSize, name, typeAddr);
                 list.Add(clrTypeStats);
             }
             
@@ -351,14 +358,15 @@ namespace MemoScope.Core.Cache
         private void CreateTables()
         {
             // Table : Types
-            RunCommand("CREATE TABLE Types (Id INTEGER, Name TEXT, MethodTable INTEGER, Count INT, TotalSize INTEGER)");
+            RunCommand("CREATE TABLE Types (Id INTEGER, Name TEXT, MethodTable INTEGER, Count INT, TotalSize INTEGER, TypeAddr INTEGER)");
 
-            cmdInsertType = cxion.PrepareCommand("INSERT INTO Types(Id, Name, MethodTable, Count, TotalSize) VALUES (@Id, @Name, @MethodTable, @Count, @TotalSize)");
+            cmdInsertType = cxion.PrepareCommand("INSERT INTO Types(Id, Name, MethodTable, Count, TotalSize, TypeAddr) VALUES (@Id, @Name, @MethodTable, @Count, @TotalSize, @TypeAddr)");
             paramId_InsertType = cmdInsertType.CreateParameter("Id");
             paramName_InsertType = cmdInsertType.CreateParameter("Name");
             paramMethodTable_InsertType = cmdInsertType.CreateParameter("MethodTable");
             paramCount_InsertType = cmdInsertType.CreateParameter("Count");
             paramTotalSize_InsertType = cmdInsertType.CreateParameter("TotalSize");
+            paramTypeAddr_InsertType = cmdInsertType.CreateParameter("TypeAddr");
 
             // Table : Instances
             RunCommand("CREATE TABLE Instances (TypeId INTEGER, Address INTEGER)");
